@@ -14,3 +14,88 @@ a {
 * {
   box-sizing: border-box;
 }
+
+/*
+ * Classes utilitarias minimas.
+ *
+ * O projeto usa estilos inline para o layout estatico. Estas classes
+ * adicionam apenas o que inline style nao consegue expressar: pseudo-classes
+ * (:hover, :focus-visible) e media queries.
+ *
+ * Onde a classe precisa sobrescrever propriedades que tambem aparecem em
+ * `style={{}}`, usamos `!important` porque inline style tem maior
+ * especificidade que CSS externo.
+ */
+
+.tm-button {
+  transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
+}
+
+.tm-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.12);
+}
+
+.tm-button:active:not(:disabled) {
+  transform: translateY(0);
+  filter: brightness(0.95);
+}
+
+.tm-button:focus-visible {
+  outline: 2px solid #6f8eff;
+  outline-offset: 2px;
+}
+
+.tm-button:disabled {
+  cursor: not-allowed;
+}
+
+.tm-input {
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.tm-input:focus-visible,
+.tm-input:focus {
+  outline: none;
+  border-color: #6f8eff !important;
+  box-shadow: 0 0 0 3px rgba(111, 142, 255, 0.25);
+}
+
+.tm-input[aria-invalid="true"] {
+  border-color: #ff8a8a !important;
+}
+
+.tm-input[aria-invalid="true"]:focus-visible,
+.tm-input[aria-invalid="true"]:focus {
+  border-color: #ff8a8a !important;
+  box-shadow: 0 0 0 3px rgba(255, 138, 138, 0.25);
+}
+
+/* Padding lateral generoso no desktop, compacto em telas estreitas. */
+@media (max-width: 720px) {
+  .tm-page {
+    padding: 2rem 1rem !important;
+  }
+}
+
+/* Card e cabecalho da lista quebram em coluna em telas estreitas. */
+@media (max-width: 520px) {
+  .tm-card-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+
+  .tm-card-status {
+    align-items: flex-start !important;
+  }
+
+  .tm-list-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+}
+
+/* Botoes do card podem estourar em mobile - permitimos quebra de linha. */
+.tm-card-footer {
+  flex-wrap: wrap;
+}

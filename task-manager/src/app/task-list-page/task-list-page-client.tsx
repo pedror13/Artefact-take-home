@@ -5,18 +5,22 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { api } from "~/trpc/react";
 
 import { TaskCard } from "./task-card";
+import { TaskCreateModal } from "./task-create-modal";
 import {
   TASK_DELETE_FADE_MS,
   TASK_FEEDBACK_DURATION_MS,
   TASKS_PAGE_SIZE,
   TASKS_PREFETCH_ROOT_MARGIN,
 } from "./task-list-page.config";
-import type { FeedbackState } from "./task-list-page.types";
+import { getErrorMessage } from "./task-list-page.errors";
+import type { FeedbackState, TaskEditInput, TaskFormInput } from "./task-list-page.types";
 
 export function TaskListPageClient() {
   const utils = api.useUtils();
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const [deletingTaskIds, setDeletingTaskIds] = useState<Set<string>>(new Set());
+  const [updatingTaskIds, setUpdatingTaskIds] = useState<Set<string>>(new Set());
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const deleteTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -77,8 +81,130 @@ export function TaskListPageClient() {
 
       setFeedback({
         type: "error",
-        message: mutationError.message,
+        message: getErrorMessage(mutationError),
       });
+    },
+  });
+
+  const { mutateAsync: createTask, isPending: isCreatingTask } = api.task.create.useMutation({
+    onMutate: async (input) => {
+      setFeedback(null);
+
+      await utils.task.list.cancel({ limit: TASKS_PAGE_SIZE });
+
+      const previousData = utils.task.list.getInfiniteData({
+        limit: TASKS_PAGE_SIZE,
+      });
+      const optimisticTaskId = `temp-${crypto.randomUUID()}`;
+
+      utils.task.list.setInfiniteData({ limit: TASKS_PAGE_SIZE }, (currentData) => {
+        if (!currentData) return currentData;
+
+        return {
+          ...currentData,
+          pages: currentData.pages.map((page, index) => {
+            if (index !== 0) return page;
+
+            return {
+              ...page,
+              totalCount: page.totalCount + 1,
+              items: [
+                {
+                  id: optimisticTaskId,
+                  titulo: input.titulo,
+                  descricao: input.descricao,
+                  dataCriacao: new Date(),
+                  prazo: input.prazo,
+                  status: "pendente",
+                },
+                ...page.items,
+              ],
+            };
+          }),
+        };
+      });
+
+      return { previousData, optimisticTaskId };
+    },
+    onSuccess: (createdTask, _variables, context) => {
+      if (context?.optimisticTaskId) {
+        utils.task.list.setInfiniteData({ limit: TASKS_PAGE_SIZE }, (currentData) => {
+          if (!currentData) return currentData;
+
+          return {
+            ...currentData,
+            pages: currentData.pages.map((page) => ({
+              ...page,
+              items: page.items.map((task) =>
+                task.id === context.optimisticTaskId ? createdTask : task,
+              ),
+            })),
+          };
+        });
+      }
+
+      setFeedback({
+        type: "success",
+        message: "Tarefa criada com sucesso.",
+      });
+    },
+    // Erros de criacao sao tratados dentro do modal de formulario, para que
+    // o usuario veja a mensagem inline e o modal permaneca aberto.
+    onError: (_mutationError, _variables, context) => {
+      if (context?.previousData) {
+        utils.task.list.setInfiniteData({ limit: TASKS_PAGE_SIZE }, () => context.previousData);
+      }
+    },
+  });
+
+  const { mutateAsync: updateTask } = api.task.update.useMutation({
+    onMutate: async (input) => {
+      setFeedback(null);
+
+      await utils.task.list.cancel({ limit: TASKS_PAGE_SIZE });
+
+      const previousData = utils.task.list.getInfiniteData({
+        limit: TASKS_PAGE_SIZE,
+      });
+
+      utils.task.list.setInfiniteData({ limit: TASKS_PAGE_SIZE }, (currentData) => {
+        if (!currentData) return currentData;
+
+        return {
+          ...currentData,
+          pages: currentData.pages.map((page) => ({
+            ...page,
+            items: page.items.map((task) => {
+              if (task.id !== input.id) return task;
+
+              return {
+                ...task,
+                titulo: input.titulo,
+                descricao: input.descricao,
+                prazo: input.prazo,
+                status: input.status ?? task.status,
+              };
+            }),
+          })),
+        };
+      });
+
+      return { previousData };
+    },
+    onSuccess: (_updatedTask, variables) => {
+      const isFinishingTask = variables.status === "concluida";
+      setFeedback({
+        type: "success",
+        message: isFinishingTask
+          ? "Tarefa concluida com sucesso."
+          : "Tarefa atualizada com sucesso.",
+      });
+    },
+    // Erros de update sao tratados pelo caller: o modal de edicao exibe
+    onError: (_mutationError, _variables, context) => {
+      if (context?.previousData) {
+        utils.task.list.setInfiniteData({ limit: TASKS_PAGE_SIZE }, () => context.previousData);
+      }
     },
   });
 
@@ -110,6 +236,69 @@ export function TaskListPageClient() {
     deleteTimeoutsRef.current.set(taskId, timeoutId);
   };
 
+  const runTaskUpdate = async (
+    taskId: string,
+    payload: {
+      titulo: string;
+      descricao?: string;
+      prazo?: Date;
+      status?: "pendente" | "concluida";
+    },
+  ) => {
+    setUpdatingTaskIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+      nextIds.add(taskId);
+      return nextIds;
+    });
+
+    try {
+      await updateTask({
+        id: taskId,
+        ...payload,
+      });
+    } finally {
+      setUpdatingTaskIds((currentIds) => {
+        const nextIds = new Set(currentIds);
+        nextIds.delete(taskId);
+        return nextIds;
+      });
+    }
+  };
+
+  const handleTaskComplete = (task: (typeof tasks)[number]) => {
+    void (async () => {
+      try {
+        await runTaskUpdate(task.id, {
+          titulo: task.titulo,
+          descricao: task.descricao,
+          prazo: task.prazo,
+          status: "concluida",
+        });
+      } catch (error) {
+        setFeedback({
+          type: "error",
+          message: getErrorMessage(error),
+        });
+      }
+    })();
+  };
+
+  const handleTaskEdit = (input: TaskEditInput) => {
+    return runTaskUpdate(input.id, {
+      titulo: input.titulo,
+      descricao: input.descricao,
+      prazo: input.prazo,
+    });
+  };
+
+  const handleTaskCreate = async (input: TaskFormInput) => {
+    await createTask({
+      titulo: input.titulo,
+      descricao: input.descricao,
+      prazo: input.prazo,
+    });
+  };
+
   useEffect(() => {
     const sentinel = loadMoreRef.current;
     if (!sentinel) return;
@@ -139,14 +328,15 @@ export function TaskListPageClient() {
   }, [feedback]);
 
   useEffect(() => {
+    const timeoutsAtMount = deleteTimeoutsRef.current;
     return () => {
-      deleteTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
-      deleteTimeoutsRef.current.clear();
+      timeoutsAtMount.forEach((timeoutId) => clearTimeout(timeoutId));
+      timeoutsAtMount.clear();
     };
   }, []);
 
   return (
-    <main style={styles.pageContainer}>
+    <main className="tm-page" style={styles.pageContainer}>
       <div style={styles.header}>
         <h1 style={styles.title}>Task Manager</h1>
         <p style={styles.subtitle}>Gerencie tarefas, acompanhe prazos e evolua.</p>
@@ -162,18 +352,36 @@ export function TaskListPageClient() {
       {error ? <p>Erro ao carregar tarefas: {error.message}</p> : null}
 
       {!isPending && !error && tasks.length === 0 ? <p>Nenhuma tarefa cadastrada.</p> : null}
-      <div style={styles.taskListContainer}> 
-        <h2 style={styles.taskListTitle}>Suas Tarefas ( mostrando {tasks.length} de {totalTasks})</h2>
+      <div style={styles.taskListContainer}>
+        <div className="tm-list-header" style={styles.taskListHeader}>
+          <h2 style={styles.taskListTitle}>Suas Tarefas ( mostrando {tasks.length} de {totalTasks})</h2>
+          <button
+            type="button"
+            onClick={() => setIsCreateModalOpen(true)}
+            disabled={isCreatingTask}
+            className="tm-button"
+            style={{
+              ...styles.createTaskButton,
+              ...(isCreatingTask ? styles.createTaskButtonDisabled : {}),
+            }}
+          >
+            Nova tarefa
+          </button>
+        </div>
         {tasks.length > 0 ? (
           <ul style={styles.taskList}>
             {tasks.map((task) => {
               const isDeleting = deletingTaskIds.has(task.id);
+              const isUpdating = updatingTaskIds.has(task.id);
               return (
                 <li key={task.id} style={styles.taskListItem}>
                   <TaskCard
                     task={task}
                     isDeleting={isDeleting}
+                    isUpdating={isUpdating}
                     onDelete={triggerDeleteWithFade}
+                    onComplete={handleTaskComplete}
+                    onEdit={handleTaskEdit}
                   />
                 </li>
               );
@@ -181,22 +389,17 @@ export function TaskListPageClient() {
           </ul>
         ) : null}
       </div>
+
+      <TaskCreateModal
+        isOpen={isCreateModalOpen}
+        isCreating={isCreatingTask}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSubmit={handleTaskCreate}
+      />
       
 
       <div ref={loadMoreRef} style={styles.loadMoreSentinel} aria-hidden />
-
-      {isFetchingNextPage ? <p>Carregando mais tarefas...</p> : null}
-
-      {hasNextPage ? (
-        <button
-          type="button"
-          onClick={() => fetchNextPage()}
-          disabled={isFetchingNextPage}
-          style={styles.loadMoreButton}
-        >
-          {isFetchingNextPage ? "Carregando..." : "Carregar mais"}
-        </button>
-      ) : null}
+     
     </main>
   );
 }
@@ -214,7 +417,6 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: "2rem",
-    paddingHorizontal: 18,
     paddingLeft: 24,
     borderRadius: 16,
     border: "1px solid #30374F",
@@ -253,6 +455,25 @@ const styles = StyleSheet.create({
     color: "#F0F3FF",
     fontSize: "1.45rem",
     fontWeight: 600,
+  },
+  taskListHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "1rem",
+  },
+  createTaskButton: {
+    cursor: "pointer",
+    borderRadius: 8,
+    border: "1px solid #3B4A77",
+    backgroundColor: "#24396D",
+    color: "#DBE7FF",
+    padding: "0.5rem 0.95rem",
+    fontWeight: 600,
+  },
+  createTaskButtonDisabled: {
+    cursor: "not-allowed",
+    opacity: 0.75,
   },
   taskList: {
     listStyle: "none",

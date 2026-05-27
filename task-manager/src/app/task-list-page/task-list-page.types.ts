@@ -9,3 +9,16 @@ export type FeedbackMessage = {
 };
 
 export type FeedbackState = FeedbackMessage | null;
+
+export type TaskEditInput = {
+  id: string;
+  titulo: string;
+  descricao?: string;
+  prazo?: Date;
+};
+
+export type TaskFormInput = {
+  titulo: string;
+  descricao?: string;
+  prazo?: Date;
+};

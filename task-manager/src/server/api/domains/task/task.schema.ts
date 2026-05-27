@@ -19,7 +19,7 @@ export const createTaskInputSchema = z.object({
 
 export const updateTaskInputSchema = z.object({
   id: z.string().min(1, "id e obrigatorio"),
-  titulo: z.string().trim().min(1, "titulo e obrigatorio").optional(),
+  titulo: z.string().trim().min(1, "titulo e obrigatorio"),
   descricao: z.string().trim().optional(),
   prazo: z.coerce.date().optional(),
   status: taskStatusSchema.optional(),

@@ -161,9 +161,9 @@ export const taskRouter = createTRPCRouter({
 
     const updatedTask: Task = {
       ...currentTask,
-      titulo: input.titulo ?? currentTask.titulo,
-      descricao: input.descricao ?? currentTask.descricao,
-      prazo: input.prazo ?? currentTask.prazo,
+      titulo: input.titulo,
+      descricao: input.descricao,
+      prazo: input.prazo,
       status: input.status ?? currentTask.status,
     };
 

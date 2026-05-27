@@ -1,16 +1,24 @@
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 
 import { TASK_DELETE_FADE_MS } from "./task-list-page.config";
-import type { TaskListItem } from "./task-list-page.types";
+import { TaskEditModal } from "./task-edit-modal";
+import type { TaskEditInput, TaskListItem } from "./task-list-page.types";
 
 type TaskCardProps = {
   task: TaskListItem;
   isDeleting: boolean;
+  isUpdating: boolean;
   onDelete: (id: string) => void;
+  onComplete: (task: TaskListItem) => void;
+  onEdit: (input: TaskEditInput) => Promise<void>;
 };
 
-export function TaskCard({ task, isDeleting, onDelete }: TaskCardProps) {
+export function TaskCard({ task, isDeleting, isUpdating, onDelete, onComplete, onEdit }: TaskCardProps) {
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
   const isPending = task.status === "pendente";
+  const isCompleted = task.status === "concluida";
+  const isBusy = isDeleting || isUpdating;
   const statusLabel = isPending ? "Em andamento" : "Concluída";
   const statusStyle = isPending
     ? styles.taskStatusPending
@@ -18,67 +26,79 @@ export function TaskCard({ task, isDeleting, onDelete }: TaskCardProps) {
 
   return (
     <article style={isDeleting ? { ...styles.taskCard, ...styles.taskCardDeleting } : styles.taskCard}>
-      <div style={styles.taskCardHeader}>
+      <div className="tm-card-header" style={styles.taskCardHeader}>
         <div>
           <strong style={styles.taskTitle}>
             {task.titulo ? task.titulo : "Sem título"}
           </strong>
           <p style={styles.taskMetaText}>
-            {task.descricao ? task.descricao : "Sem descrição"}
+            {task.descricao ?? "Sem descrição"}
           </p>
         </div>
-        <div style={styles.taskCardStatus}>
+        <div className="tm-card-status" style={styles.taskCardStatus}>
           <p style={styles.taskDateText}>
             Criada em {new Date(task.dataCriacao).toLocaleString("pt-BR")}
           </p>
           <p style={{ ...styles.taskStatus, ...statusStyle }}>{statusLabel}</p>
         </div>
       </div>
-    <div style={styles.taskCardDeadline}>
-      <p style={styles.taskMetaText}>Prazo: {task.prazo ? new Date(task.prazo).toLocaleString("pt-BR") : "Não definido"}</p>
-    </div>
-      <div style={styles.taskCardFooter}>
+      <div style={styles.taskCardDeadline}>
+        <p style={styles.taskMetaText}>
+          Prazo: {task.prazo ? new Date(task.prazo).toLocaleString("pt-BR") : "Não definido"}
+        </p>
+      </div>
+      <div className="tm-card-footer" style={styles.taskCardFooter}>
         <button
           type="button"
-          disabled={isDeleting}
+          disabled={isBusy}
           onClick={() => {
-            // Placeholder: lógica de edição será implementada depois.
+            setIsEditModalOpen(true);
           }}
+          className="tm-button"
           style={{
             ...styles.actionButton,
             ...styles.editButton,
-            ...(isDeleting ? styles.actionButtonDisabled : {}),
+            ...(isBusy ? styles.actionButtonDisabled : {}),
           }}
         >
           Editar
         </button>
         <button
           type="button"
-          disabled={isDeleting}
+          disabled={isBusy || isCompleted}
           onClick={() => {
-            // Placeholder: lógica de conclusão será implementada depois.
+            onComplete(task);
           }}
+          className="tm-button"
           style={{
             ...styles.actionButton,
             ...styles.completeButton,
-            ...(isDeleting ? styles.actionButtonDisabled : {}),
+            ...((isBusy || isCompleted) ? styles.actionButtonDisabled : {}),
           }}
         >
-          Concluir
+          {isUpdating ? "Atualizando..." : "Concluir"}
         </button>
         <button
           type="button"
-          disabled={isDeleting}
+          disabled={isBusy}
           onClick={() => onDelete(task.id)}
+          className="tm-button"
           style={{
             ...styles.actionButton,
             ...styles.deleteButton,
-            ...(isDeleting ? styles.actionButtonDisabled : {}),
+            ...(isBusy ? styles.actionButtonDisabled : {}),
           }}
         >
           {isDeleting ? "Excluindo..." : "Deletar"}
         </button>
       </div>
+      <TaskEditModal
+        isOpen={isEditModalOpen}
+        task={task}
+        isUpdating={isUpdating}
+        onClose={() => setIsEditModalOpen(false)}
+        onSubmit={onEdit}
+      />
     </article>
   );
 }
@@ -126,8 +146,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: "1rem",
     alignItems: "flex-start",
-    borderColor: "red",
-    borderWidth: "1px",
+
   },
   taskCardStatus: {
     display: "flex",
