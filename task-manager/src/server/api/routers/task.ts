@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 
+import { env } from "~/env";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import {
   createTaskInputSchema,
@@ -20,6 +21,7 @@ declare global {
 
 /*
  Usado a nivel de desenvolvimento para simular o carregamento de tarefas.
+ Ativado apenas quando `SEED_MOCK_TASKS=true` (veja o script `npm run dev:mock`).
 */
 const createMockTasks = (total: number): Task[] => {
   const now = Date.now();
@@ -50,8 +52,9 @@ const taskStore =
 
 globalThis.__taskStore ??= taskStore;
 
-if (globalThis.__taskStore.tasks.length === 0) {
-  // Seed temporario para validar SSR + carregamento incremental.
+if (env.SEED_MOCK_TASKS && globalThis.__taskStore.tasks.length === 0) {
+  // Seed opt-in para validar SSR + carregamento incremental sem cadastrar
+  // tarefas manualmente. Use `npm run dev:mock` para habilitar.
   globalThis.__taskStore.tasks = createMockTasks(100);
 }
 

@@ -8,6 +8,17 @@ export const env = createEnv({
    */
   server: {
     NODE_ENV: z.enum(["development", "test", "production"]),
+    /**
+     * Quando "true" (ou "1"), o store em memoria do task router e populado com
+     * 100 tarefas mock no boot. Usado para exercitar SSR + infinite scroll
+     * sem precisar criar tarefas manualmente.
+     *
+     * Veja o script `dev:mock` em `package.json`.
+     */
+    SEED_MOCK_TASKS: z
+      .string()
+      .optional()
+      .transform((value) => value === "true" || value === "1"),
   },
 
   /**
@@ -25,6 +36,7 @@ export const env = createEnv({
    */
   runtimeEnv: {
     NODE_ENV: process.env.NODE_ENV,
+    SEED_MOCK_TASKS: process.env.SEED_MOCK_TASKS,
     // NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
   },
   /**

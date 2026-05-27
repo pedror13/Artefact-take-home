@@ -351,7 +351,7 @@ export function TaskListPageClient() {
       {isPending ? <p>Carregando tarefas...</p> : null}
       {error ? <p>Erro ao carregar tarefas: {error.message}</p> : null}
 
-      {!isPending && !error && tasks.length === 0 ? <p>Nenhuma tarefa cadastrada.</p> : null}
+      {!isPending && !error && tasks.length === 0 ? <p style={styles.taskListTitle}>Nenhuma tarefa cadastrada.</p> : null}
       <div style={styles.taskListContainer}>
         <div className="tm-list-header" style={styles.taskListHeader}>
           <h2 style={styles.taskListTitle}>Suas Tarefas ( mostrando {tasks.length} de {totalTasks})</h2>
@@ -477,10 +477,11 @@ const styles = StyleSheet.create({
   },
   taskList: {
     listStyle: "none",
-    padding: 0,
     margin: 0,
     display: "grid",
     rowGap: "0.75rem",
+    padding: 0,
+    paddingBottom: "2rem",
   },
   taskListItem: {
     margin: 0,
