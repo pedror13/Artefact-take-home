@@ -12,3 +12,8 @@ export type Task = {
 export type TaskStore = {
   tasks: Task[];
 };
+
+export type TaskListResult = {
+  items: Task[];
+  nextCursor: string | null;
+};

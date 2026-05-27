@@ -28,3 +28,13 @@ export const updateTaskInputSchema = z.object({
 export const deleteTaskInputSchema = z.object({
   id: z.string().min(1, "id e obrigatorio"),
 });
+
+export const listTasksInputSchema = z.object({
+  limit: z.number().int().min(1).max(50).default(10),
+  cursor: z.string().optional(),
+});
+
+export const listTasksOutputSchema = z.object({
+  items: z.array(taskSchema),
+  nextCursor: z.string().nullable(),
+});
