@@ -17,7 +17,7 @@ The goal was to keep the solution straightforward while still covering the requi
 
 ## Live Demo
 
-- [https://artefact-take-home-obx5a5c2c-pedror13s-projects.vercel.app/](https://artefact-take-home-obx5a5c2c-pedror13s-projects.vercel.app/)
+- [https://artefact-take-home.vercel.app/](https://artefact-take-home.vercel.app/)
 
 ## Tech Stack
 
