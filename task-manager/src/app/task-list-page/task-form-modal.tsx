@@ -93,7 +93,7 @@ export function TaskFormModal({
     };
   }, [isOpen]);
 
-  const handleSubmit: SubmitEventHandler<HTMLFormElement> = async (event) => {
+  const handleSubmit: SubmitEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
 
     const trimmedTitle = tituloInput.trim();
@@ -107,22 +107,24 @@ export function TaskFormModal({
     setFieldErrors({});
     setFormError(null);
 
-    try {
-      await onSubmit({
-        titulo: trimmedTitle,
-        descricao: descricaoInput.trim() ? descricaoInput.trim() : undefined,
-        prazo: prazoInput ? new Date(prazoInput) : undefined,
-      });
-      onClose();
-    } catch (error) {
-      const zodFieldErrors = getZodFieldErrors(error);
-      if (Object.keys(zodFieldErrors).length > 0) {
-        setFieldErrors(zodFieldErrors);
-        setFormError(null);
-      } else {
-        setFormError(getErrorMessage(error));
+    void (async () => {
+      try {
+        await onSubmit({
+          titulo: trimmedTitle,
+          descricao: descricaoInput.trim() ? descricaoInput.trim() : undefined,
+          prazo: prazoInput ? new Date(prazoInput) : undefined,
+        });
+        onClose();
+      } catch (error) {
+        const zodFieldErrors = getZodFieldErrors(error);
+        if (Object.keys(zodFieldErrors).length > 0) {
+          setFieldErrors(zodFieldErrors);
+          setFormError(null);
+        } else {
+          setFormError(getErrorMessage(error));
+        }
       }
-    }
+    })();
   };
 
   const handleOverlayClick = (event: ReactMouseEvent<HTMLDivElement>) => {

@@ -23,9 +23,7 @@ const resetTaskStore = () => {
  * testes de paginacao quando precisamos de timestamps controlados.
  */
 const seedTasks = (...tasks: Task[]) => {
-  if (!globalThis.__taskStore) {
-    globalThis.__taskStore = { tasks: [] };
-  }
+  globalThis.__taskStore ??= { tasks: [] };
   globalThis.__taskStore.tasks.push(...tasks);
 };
 
