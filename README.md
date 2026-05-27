@@ -15,6 +15,10 @@ This project implements a practical challenge to build a task management app wit
 
 The goal was to keep the solution straightforward while still covering the required behavior and user feedback states.
 
+## Live Demo
+
+- [https://artefact-take-home-obx5a5c2c-pedror13s-projects.vercel.app/](https://artefact-take-home-obx5a5c2c-pedror13s-projects.vercel.app/)
+
 ## Tech Stack
 
 - [Next.js](https://nextjs.org) `15.5.18`
