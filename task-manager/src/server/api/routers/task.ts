@@ -136,6 +136,7 @@ export const taskRouter = createTRPCRouter({
       return {
         items,
         nextCursor,
+        totalCount: taskStore.tasks.length,
       };
     }),
 

@@ -6,6 +6,8 @@ import { api } from "~/trpc/react";
 
 import { TaskCard } from "./task-card";
 import {
+  TASK_DELETE_FADE_MS,
+  TASK_FEEDBACK_DURATION_MS,
   TASKS_PAGE_SIZE,
   TASKS_PREFETCH_ROOT_MARGIN,
 } from "./task-list-page.config";
@@ -14,8 +16,9 @@ import type { FeedbackState } from "./task-list-page.types";
 export function TaskListPageClient() {
   const utils = api.useUtils();
   const [feedback, setFeedback] = useState<FeedbackState>(null);
-  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
+  const [deletingTaskIds, setDeletingTaskIds] = useState<Set<string>>(new Set());
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const deleteTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const {
     data,
@@ -35,10 +38,11 @@ export function TaskListPageClient() {
     return data?.pages.flatMap((page) => page.items) ?? [];
   }, [data]);
 
+  const totalTasks = data?.pages[0]?.totalCount ?? 0;
+
   const { mutate: deleteTask } = api.task.delete.useMutation({
     onMutate: async ({ id }) => {
       setFeedback(null);
-      setDeletingTaskId(id);
 
       await utils.task.list.cancel({ limit: TASKS_PAGE_SIZE });
 
@@ -76,10 +80,35 @@ export function TaskListPageClient() {
         message: mutationError.message,
       });
     },
-    onSettled: () => {
-      setDeletingTaskId(null);
-    },
   });
+
+  const triggerDeleteWithFade = (taskId: string) => {
+    if (deleteTimeoutsRef.current.has(taskId)) return;
+
+    setDeletingTaskIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+      nextIds.add(taskId);
+      return nextIds;
+    });
+
+    const timeoutId = setTimeout(() => {
+      deleteTimeoutsRef.current.delete(taskId);
+      deleteTask(
+        { id: taskId },
+        {
+          onSettled: (_data, _error, variables) => {
+            setDeletingTaskIds((currentIds) => {
+              const nextIds = new Set(currentIds);
+              nextIds.delete(variables.id);
+              return nextIds;
+            });
+          },
+        },
+      );
+    }, TASK_DELETE_FADE_MS);
+
+    deleteTimeoutsRef.current.set(taskId, timeoutId);
+  };
 
   useEffect(() => {
     const sentinel = loadMoreRef.current;
@@ -99,10 +128,29 @@ export function TaskListPageClient() {
     return () => observer.disconnect();
   }, [fetchNextPage, hasNextPage, isFetchingNextPage, tasks.length]);
 
+  useEffect(() => {
+    if (!feedback) return;
+
+    const feedbackTimeoutId = setTimeout(() => {
+      setFeedback(null);
+    }, TASK_FEEDBACK_DURATION_MS);
+
+    return () => clearTimeout(feedbackTimeoutId);
+  }, [feedback]);
+
+  useEffect(() => {
+    return () => {
+      deleteTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+      deleteTimeoutsRef.current.clear();
+    };
+  }, []);
+
   return (
     <main style={styles.pageContainer}>
-      <h1 style={styles.title}>Task Manager</h1>
-      <p style={styles.subtitle}>Lista de tarefas com SSR e carregamento incremental.</p>
+      <div style={styles.header}>
+        <h1 style={styles.title}>Task Manager</h1>
+        <p style={styles.subtitle}>Gerencie tarefas, acompanhe prazos e evolua.</p>
+      </div>
 
       {feedback ? (
         <p style={feedback.type === "success" ? styles.feedbackSuccess : styles.feedbackError}>
@@ -114,23 +162,26 @@ export function TaskListPageClient() {
       {error ? <p>Erro ao carregar tarefas: {error.message}</p> : null}
 
       {!isPending && !error && tasks.length === 0 ? <p>Nenhuma tarefa cadastrada.</p> : null}
-
-      {tasks.length > 0 ? (
-        <ul style={styles.taskList}>
-          {tasks.map((task) => {
-            const isDeleting = deletingTaskId === task.id;
-            return (
-              <li key={task.id} style={styles.taskListItem}>
-                <TaskCard
-                  task={task}
-                  isDeleting={isDeleting}
-                  onDelete={(taskId) => deleteTask({ id: taskId })}
-                />
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
+      <div style={styles.taskListContainer}> 
+        <h2 style={styles.taskListTitle}>Suas Tarefas ( mostrando {tasks.length} de {totalTasks})</h2>
+        {tasks.length > 0 ? (
+          <ul style={styles.taskList}>
+            {tasks.map((task) => {
+              const isDeleting = deletingTaskIds.has(task.id);
+              return (
+                <li key={task.id} style={styles.taskListItem}>
+                  <TaskCard
+                    task={task}
+                    isDeleting={isDeleting}
+                    onDelete={triggerDeleteWithFade}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+      </div>
+      
 
       <div ref={loadMoreRef} style={styles.loadMoreSentinel} aria-hidden />
 
@@ -158,31 +209,50 @@ const StyleSheet = {
 
 const styles = StyleSheet.create({
   pageContainer: {
-    maxWidth: 720,
-    margin: "0 auto",
-    padding: "2rem 1rem",
+    padding: "4rem 3rem",
+    backgroundColor: "#0F121E",
+  },
+  header: {
+    marginBottom: "2rem",
+    paddingHorizontal: 18,
+    paddingLeft: 24,
+    borderRadius: 16,
+    border: "1px solid #30374F",
   },
   title: {
+    fontSize: "2.5rem",
     marginBottom: "0.5rem",
+    color: "#F0F3FF",
   },
   subtitle: {
     marginTop: 0,
     marginBottom: "1.5rem",
-    color: "#4b5563",
+    color: "#8590B2",
   },
   feedbackSuccess: {
     marginBottom: "1rem",
     padding: "0.75rem 1rem",
-    borderRadius: 8,
+    borderRadius: 16,
     backgroundColor: "#ecfdf5",
     color: "#065f46",
   },
   feedbackError: {
     marginBottom: "1rem",
     padding: "0.75rem 1rem",
-    borderRadius: 8,
+    borderRadius: 16,
     backgroundColor: "#fef2f2",
     color: "#991b1b",
+  },
+  taskListContainer: {
+    border: "1px solid #30374F",
+    borderRadius: 10,
+    paddingLeft: 24,
+    paddingRight: 24,
+  },
+  taskListTitle: {
+    color: "#F0F3FF",
+    fontSize: "1.45rem",
+    fontWeight: 600,
   },
   taskList: {
     listStyle: "none",

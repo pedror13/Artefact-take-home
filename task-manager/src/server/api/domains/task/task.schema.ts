@@ -37,4 +37,5 @@ export const listTasksInputSchema = z.object({
 export const listTasksOutputSchema = z.object({
   items: z.array(taskSchema),
   nextCursor: z.string().nullable(),
+  totalCount: z.number().int(),
 });

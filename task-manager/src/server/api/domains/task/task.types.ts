@@ -16,4 +16,5 @@ export type TaskStore = {
 export type TaskListResult = {
   items: Task[];
   nextCursor: string | null;
+  totalCount: number;
 };
